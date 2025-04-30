@@ -221,7 +221,7 @@ During the implementation, several challenges were encountered:
 
 ## Test Cases
 
-The following test cases were developed to validate the compiler's functionality:
+The following test cases were developed to validate the compiler's functionality: They can be run with `cargo test`.
 
 ### Basic Program Structure
 
