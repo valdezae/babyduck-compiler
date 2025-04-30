@@ -295,13 +295,3 @@ let program = r#"
     end
 "#;
 ```
-
-## Future Work
-
-For future iterations of the compiler, the following features will be implemented:
-
-1. **Semantic Analysis**: Type checking and variable declaration validation
-2. **Code Generation**: Translation to intermediate code or target machine code
-3. **Optimization**: Basic optimizations for the generated code
-4. **Error Recovery**: Better error handling and recovery during parsing
-5. **Symbol Table**: Enhanced symbol management for variables and functions
