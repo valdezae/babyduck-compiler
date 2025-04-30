@@ -1,0 +1,296 @@
+// BabyDuck language grammar for LALRPOP
+// Based on the specification from A00829909_entrega0.pdf
+
+use std::str::FromStr;
+use crate::ast::*;
+
+grammar;
+
+// Lexical tokens
+match {
+    r"\s*" => {},
+    r"//[^\n\r]*[\n\r]*" => {},
+    r"/\*([^*]|\*[^/])*\*/" => {},
+
+    "program" => PROGRAM,
+    "var" => VAR,
+    "int" => INT,
+    "float" => FLOAT,
+    "main" => MAIN,
+    "end" => END,
+    "if" => IF,
+    "else" => ELSE,
+    "while" => WHILE,
+    "do" => DO,
+    "print" => PRINT,
+    "void" => VOID,
+
+    "=" => ASSIGN,
+    "+" => PLUS,
+    "-" => MINUS,
+    "*" => MULTIPLY,
+    "/" => DIVIDE,
+    ">" => GT,
+    "<" => LT,
+    "==" => EQ,
+
+    ";" => SEMICOLON,
+    ":" => COLON,
+    "(" => LPAREN,
+    ")" => RPAREN,
+    "{" => LBRACE,
+    "}" => RBRACE,
+    "[" => LBRACKET,
+    "]" => RBRACKET,
+    "," => COMMA,
+
+    r"[0-9]+" => CTE_INT,
+    r"[0-9]+\.[0-9]+" => CTE_FLOAT,
+    r#""[^"]*""# => CTE_STRING,
+
+    r"[a-zA-Z][a-zA-Z0-9_]*" => ID,
+}
+
+// Grammar Rules
+
+pub Program: Program = {
+    PROGRAM <id:ID> SEMICOLON <decls:ProgramDecls> => {
+        let (vars, funcs, body) = decls;
+        Program {
+            id: id.to_string(),
+            vars,
+            funcs,
+            main_body: body,
+        }
+    }
+};
+
+// Modified to handle multiple var sections
+ProgramDecls: (Vec<VarDeclaration>, Vec<FunctionDeclaration>, Vec<Statement>) = {
+    <vars:VarSections> <f:FunctionSection?> MAIN <body:Body> END => {
+        (vars, f.unwrap_or_else(Vec::new), body)
+    },
+    <f:FunctionSection?> MAIN <body:Body> END => {
+        (Vec::new(), f.unwrap_or_else(Vec::new), body)
+    }
+};
+
+// New rule to handle multiple var sections
+VarSections: Vec<VarDeclaration> = {
+    <v:VarSection> => v,
+    <v:VarSection> <rest:VarSections> => {
+        let mut result = v;
+        result.extend(rest);
+        result
+    }
+};
+
+VarSection: Vec<VarDeclaration> = {
+    VAR <decls:DeclaracionVar> => decls
+};
+
+FunctionSection: Vec<FunctionDeclaration> = {
+    <funcs:FuncDecl+> => funcs
+};
+
+DeclaracionVar: Vec<VarDeclaration> = {
+    <decls:VarList> => decls,
+};
+
+VarList: Vec<VarDeclaration> = {
+    <id:ID> COLON <typ:TYPE> SEMICOLON => vec![VarDeclaration {
+        id: id.to_string(),
+        var_type: typ,
+    }],
+    <id:ID> COLON <typ:TYPE> SEMICOLON <rest:VarList> => {
+        let mut result = vec![VarDeclaration {
+            id: id.to_string(),
+            var_type: typ,
+        }];
+        result.extend(rest);
+        result
+    },
+};
+
+TYPE: Type = {
+    INT => Type::Int,
+    FLOAT => Type::Float,
+};
+
+Body: Vec<Statement> = {
+    LBRACE <stmts:STATEMENTS> RBRACE => stmts,
+};
+
+STATEMENTS: Vec<Statement> = {
+    <stmts:STATEMENT*> => stmts,
+};
+
+STATEMENT: Statement = {
+    <a:ASSIGNMENT> => Statement::Assignment(a),
+    <c:CONDITION> => Statement::Condition(c),
+    <c:CYCLE> => Statement::Cycle(c),
+    <f:F_Call> => Statement::FunctionCall(f),
+    <p:Print> => Statement::Print(p),
+};
+
+ASSIGNMENT: Assignment = {
+    <id:ID> ASSIGN <expr:EXPRESION> SEMICOLON => {
+        Assignment {
+            id: id.to_string(),
+            expression: expr,
+        }
+    },
+};
+
+EXPRESION: Expression = {
+    <exp:COMPARISON> => exp,
+};
+
+// Add a new level for comparison operators
+COMPARISON: Expression = {
+    <left:EXP> GT <right:EXP> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::GreaterThan,
+        right: Box::new(right),
+    },
+    <left:EXP> LT <right:EXP> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::LessThan,
+        right: Box::new(right),
+    },
+    <left:EXP> EQ <right:EXP> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::Equal,
+        right: Box::new(right),
+    },
+    <exp:EXP> => exp,
+};
+
+// Expression grammar with proper precedence through nesting
+EXP: Expression = {
+    <left:EXP> PLUS <right:TERMINO> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::Plus,
+        right: Box::new(right),
+    },
+    <left:EXP> MINUS <right:TERMINO> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::Minus,
+        right: Box::new(right),
+    },
+    <term:TERMINO> => term,
+};
+
+TERMINO: Expression = {
+    <left:TERMINO> MULTIPLY <right:FACTOR> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::Multiply,
+        right: Box::new(right),
+    },
+    <left:TERMINO> DIVIDE <right:FACTOR> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::Divide,
+        right: Box::new(right),
+    },
+    <factor:FACTOR> => factor,
+};
+
+FACTOR: Expression = {
+    LPAREN <expr:EXPRESION> RPAREN => expr,
+    <id:ID> => Expression::Identifier(id.to_string()),
+    <cte:CTE> => cte,
+};
+
+CTE: Expression = {
+    <n:CTE_INT> => Expression::IntegerLiteral(i32::from_str(n).unwrap()),
+    <f:CTE_FLOAT> => Expression::FloatLiteral(f64::from_str(f).unwrap()),
+};
+
+// Fix the dangling else problem with prioritized alternatives
+CONDITION: Condition = {
+    IF LPAREN <expr:EXPRESION> RPAREN <if_body:Body> ELSE <else_body:Body> => {
+        Condition {
+            condition: expr,
+            if_body,
+            else_body: Some(else_body),
+        }
+    },
+    IF LPAREN <expr:EXPRESION> RPAREN <if_body:Body> => {
+        Condition {
+            condition: expr,
+            if_body,
+            else_body: None,
+        }
+    }
+};
+
+CYCLE: Cycle = {
+    WHILE LPAREN <expr:EXPRESION> RPAREN DO <body:Body> SEMICOLON => {
+        Cycle {
+            condition: expr,
+            body,
+        }
+    },
+};
+
+F_Call: FunctionCall = {
+    <id:ID> LPAREN <args:FunctionArgs> RPAREN SEMICOLON => {
+        FunctionCall {
+            id: id.to_string(),
+            arguments: args,
+        }
+    },
+};
+
+ExpressionList: Vec<Expression> = {
+    <first:EXPRESION> => vec![first],
+    <first:EXPRESION> COMMA <rest:ExpressionList> => {
+        let mut result = vec![first];
+        result.extend(rest);
+        result
+    },
+};
+
+FunctionArgs: Vec<Expression> = {
+    <args:ExpressionList> => args,
+    => Vec::new(),
+};
+
+Print: PrintStatement = {
+    PRINT LPAREN <expr:EXPRESION> RPAREN SEMICOLON => PrintStatement::Expression(expr),
+    PRINT LPAREN <s:CTE_STRING> RPAREN SEMICOLON => {
+        PrintStatement::StringLiteral(s[1..s.len()-1].to_string())
+    },
+};
+
+FuncDecl: FunctionDeclaration = {
+    VOID <id:ID> LPAREN <params:Params> RPAREN LBRACE <vars:VarSection?> <body:Body> RBRACE SEMICOLON => {
+        FunctionDeclaration {
+            id: id.to_string(),
+            parameters: params,
+            vars: vars.unwrap_or_else(Vec::new),
+            body,
+        }
+    },
+};
+
+ParamList: Vec<Parameter> = {
+    <param:Param> => vec![param],
+    <param:Param> COMMA <rest:ParamList> => {
+        let mut result = vec![param];
+        result.extend(rest);
+        result
+    },
+};
+
+Params: Vec<Parameter> = {
+    <params:ParamList> => params,
+    => Vec::new(),
+};
+
+Param: Parameter = {
+    <id:ID> COLON <typ:TYPE> => Parameter {
+        id: id.to_string(),
+        param_type: typ
+    },
+};
