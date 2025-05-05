@@ -264,7 +264,7 @@ Print: PrintStatement = {
 };
 
 FuncDecl: FunctionDeclaration = {
-    VOID <id:ID> LPAREN <params:Params> RPAREN LBRACE <vars:VarSection?> <body:Body> RBRACE SEMICOLON => {
+    VOID <id:ID> LPAREN <params:Params> RPAREN LBRACKET <vars:VarSections?> <body:Body> RBRACKET SEMICOLON => {
         FunctionDeclaration {
             id: id.to_string(),
             parameters: params,
