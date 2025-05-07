@@ -7,7 +7,7 @@ use std::fmt;
 pub enum FunctionDirError {
     DuplicateVariable(String, String), // (var_name, scope_name)
     DuplicateFunction(String),
-    // Add more error types as needed
+    // Can add more error types as needed
 }
 
 impl fmt::Display for FunctionDirError {
