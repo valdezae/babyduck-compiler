@@ -4,8 +4,10 @@ lalrpop_mod!(pub babyduck);
 
 pub mod ast;
 pub mod function_directory;
+pub mod quadruples;
 
 use function_directory::{FunctionDirectory, FunctionDirError};
+use quadruples::QuadrupleGenerator;
 
 #[test]
 fn babyduck_basic_structure() {
@@ -195,6 +197,143 @@ fn test_duplicate_variable_error() {
     } else {
         panic!("Expected DuplicateVariable error for global variable");
     }
+}
+
+#[test]
+fn babyduck_boolean_operations() {
+    let program = r#"
+    program example;
+    var x: bool;
+    var y: int;
+    main {
+        y = 10;
+        x = true;
+        x = y > 5;
+        if (x == true) {
+            print("Condition is true");
+        } else {
+            print("Condition is false");
+        }
+    }
+    end
+    "#;
+
+    let result = babyduck::ProgramParser::new().parse(program);
+    assert!(result.is_ok(), "Failed to parse boolean operations: {:?}", result.err());
+    println!("Boolean operations test passed");
+    println!("Parse result: {:#?}", result.unwrap());
+}
+
+#[test]
+fn test_quadruple_generation() {
+    // Create a simple program with arithmetic operations
+    let program = r#"
+    program example;
+    var A, B, C, D, E, F, G, H, I, J, K, L, R: int;
+    main {
+       R = ((A + B) * C + D * E * F + K / H * J) + G * L + H + J > (A - C * D) / F;
+       print(R);
+    }
+    end
+    "#;
+
+    let parse_result = babyduck::ProgramParser::new().parse(program);
+    assert!(parse_result.is_ok(), "Failed to parse program: {:?}", parse_result.err());
+    
+    let ast = parse_result.unwrap();
+    
+    // Create function directory for variable lookups
+    let function_directory_result = FunctionDirectory::from_program(&ast);
+    assert!(function_directory_result.is_ok(), "Failed to create function directory: {:?}", function_directory_result.err());
+    let function_directory = function_directory_result.unwrap();
+    
+    // Create quadruple generator
+    let mut quad_gen = QuadrupleGenerator::new();
+    quad_gen.set_function_directory(function_directory);
+    quad_gen.set_current_scope("main");
+    
+    // Generate quadruples from the AST's main statements
+    quad_gen.generate_from_statements(&ast.main_body);
+    
+    println!("\n=== QUADRUPLES GENERATED FOR TEST PROGRAM ===");
+    println!("Source code:");
+    println!("```");
+    println!("{}", program);
+    println!("```\n");
+    
+    // Get the generated quadruples and print them
+    let quadruples = quad_gen.get_quadruples_as_strings();
+    println!("Generated quadruples:");
+    println!("===================================");
+    println!("No. | Operation | Arg1 | Arg2 | Result");
+    println!("-----------------------------------");
+    
+    for (i, quad) in quadruples.iter().enumerate() {
+        // Strip the outer parentheses if they exist
+        let quad_str = if quad.starts_with('(') && quad.ends_with(')') {
+            &quad[1..quad.len()-1]
+        } else {
+            quad
+        };
+        
+        // Split by commas and print in a tabular format
+        let parts: Vec<&str> = quad_str.split(',').map(|s| s.trim()).collect();
+        if parts.len() >= 4 {
+            println!("{:3} | {:9} | {:4} | {:4} | {:6}", i, parts[0], parts[1], parts[2], parts[3]);
+        } else {
+            println!("{:3} | {}", i, quad);
+        }
+    }
+    println!("===================================");
+    
+    // Print variable addresses for better understanding
+    println!("\nVariable Addresses:");
+    println!("===================================");
+    println!("Variable | Address");
+    println!("-----------------------------------");
+    for (name, addr) in quad_gen.get_variables() {
+        println!("{:8} | {:6}", name, addr);
+    }
+    println!("===================================");
+    
+    // Print constant tables for debugging
+    println!("\nInteger Constants:");
+    println!("===================================");
+    println!("Value | Address");
+    println!("-----------------------------------");
+    for (value, addr) in quad_gen.get_int_constants() {
+        println!("{:5} | {:6}", value, addr);
+    }
+    println!("===================================");
+    
+    println!("\nFloat Constants:");
+    println!("===================================");
+    println!("Value | Address");
+    println!("-----------------------------------");
+    for (value, addr) in quad_gen.get_float_constants() {
+        println!("{:5.1} | {:6}", value, addr);
+    }
+    println!("===================================");
+    
+    // Assert that quadruples were generated
+    assert!(!quadruples.is_empty(), "No quadruples were generated");
+    
+    // Check that we have a sufficient number of quadruples for this complex expression
+    assert!(quadruples.len() >= 15, "Expected at least 15 quadruples for this complex expression, got {}", quadruples.len());
+    
+    // Validate that we have comparison operation (>)
+    let has_comparison = quadruples.iter().any(|q| q.contains(">"));
+    assert!(has_comparison, "No '>' comparison quadruple found");
+    
+    // Check that all variables are properly registered
+    let vars = quad_gen.get_variables();
+    let expected_vars = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "R"];
+    for var_name in expected_vars.iter() {
+        let var_exists = vars.iter().any(|(name, _)| name == var_name);
+        assert!(var_exists, "Variable '{}' not found in variables table", var_name);
+    }
+    
+    println!("\nQuadruple generation test passed");
 }
 
 fn main() {

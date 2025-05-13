@@ -24,6 +24,9 @@ match {
     "do" => DO,
     "print" => PRINT,
     "void" => VOID,
+    "bool" => BOOL,
+    "true" => TRUE,
+    "false" => FALSE,
 
     "=" => ASSIGN,
     "+" => PLUS,
@@ -33,6 +36,7 @@ match {
     ">" => GT,
     "<" => LT,
     "==" => EQ,
+    "!=" => NEQ,
 
     ";" => SEMICOLON,
     ":" => COLON,
@@ -47,6 +51,7 @@ match {
     r"[0-9]+" => CTE_INT,
     r"[0-9]+\.[0-9]+" => CTE_FLOAT,
     r#""[^"]*""# => CTE_STRING,
+
 
     r"[a-zA-Z][a-zA-Z0-9_]*" => ID,
 }
@@ -97,6 +102,7 @@ DeclaracionVar: Vec<VarDeclaration> = {
     <decls:VarList> => decls,
 };
 
+// Modified to handle both single declarations and comma-separated lists
 VarList: Vec<VarDeclaration> = {
     <id:ID> COLON <typ:TYPE> SEMICOLON => vec![VarDeclaration {
         id: id.to_string(),
@@ -110,11 +116,41 @@ VarList: Vec<VarDeclaration> = {
         result.extend(rest);
         result
     },
+    <id:ID> <rest:IDListTail> COLON <typ:TYPE> SEMICOLON => {
+        let mut ids = vec![id.to_string()];
+        ids.extend(rest);
+        ids.into_iter().map(|id| VarDeclaration {
+            id,
+            var_type: typ.clone(),
+        }).collect()
+    },
+    <id:ID> <rest:IDListTail> COLON <typ:TYPE> SEMICOLON <more:VarList> => {
+        let mut ids = vec![id.to_string()];
+        ids.extend(rest);
+        let mut result: Vec<VarDeclaration> = ids.into_iter().map(|id| VarDeclaration {
+            id,
+            var_type: typ.clone(),
+        }).collect();
+        result.extend(more);
+        result
+    },
+};
+
+// Instead of using a recursive IDList with inline, split into ID and IDListTail
+// This avoids the cyclic inline issue
+IDListTail: Vec<String> = {
+    COMMA <id:ID> => vec![id.to_string()],
+    COMMA <id:ID> <rest:IDListTail> => {
+        let mut result = vec![id.to_string()];
+        result.extend(rest);
+        result
+    },
 };
 
 TYPE: Type = {
     INT => Type::Int,
     FLOAT => Type::Float,
+    BOOL => Type::Bool,
 };
 
 Body: Vec<Statement> = {
@@ -163,6 +199,11 @@ COMPARISON: Expression = {
         operator: Operator::Equal,
         right: Box::new(right),
     },
+    <left:EXP> NEQ <right:EXP> => Expression::BinaryOp {
+        left: Box::new(left),
+        operator: Operator::NotEqual,
+        right: Box::new(right),
+    },
     <exp:EXP> => exp,
 };
 
@@ -204,6 +245,8 @@ FACTOR: Expression = {
 CTE: Expression = {
     <n:CTE_INT> => Expression::IntegerLiteral(i32::from_str(n).unwrap()),
     <f:CTE_FLOAT> => Expression::FloatLiteral(f64::from_str(f).unwrap()),
+    TRUE => Expression::BooleanLiteral(true),
+    FALSE => Expression::BooleanLiteral(false),
 };
 
 // Fix the dangling else problem with prioritized alternatives
@@ -258,9 +301,6 @@ FunctionArgs: Vec<Expression> = {
 
 Print: PrintStatement = {
     PRINT LPAREN <expr:EXPRESION> RPAREN SEMICOLON => PrintStatement::Expression(expr),
-    PRINT LPAREN <s:CTE_STRING> RPAREN SEMICOLON => {
-        PrintStatement::StringLiteral(s[1..s.len()-1].to_string())
-    },
 };
 
 FuncDecl: FunctionDeclaration = {
@@ -294,3 +334,4 @@ Param: Parameter = {
         param_type: typ
     },
 };
+

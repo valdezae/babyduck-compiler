@@ -21,12 +21,19 @@ impl fmt::Display for FunctionDirError {
     }
 }
 
+/// Represents a variable with its type and memory address
+#[derive(Debug, Clone)]
+pub struct VariableInfo {
+    pub var_type: Type,
+    pub address: i32,  // Memory address where the variable is stored
+}
+
 /// Represents a function's metadata in the directory
 #[derive(Debug, Clone)]
 pub struct FunctionInfo {
     pub return_type: Option<Type>,
-    pub parameters: Vec<(String, Type)>,
-    pub local_variables: HashMap<String, Type>,
+    pub parameters: Vec<(String, Type, i32)>,  // (name, type, address)
+    pub local_variables: HashMap<String, VariableInfo>,
     pub is_program: bool,  // Flag to indicate if this is the program entry
 }
 
@@ -34,6 +41,10 @@ pub struct FunctionInfo {
 #[derive(Debug, Clone)]
 pub struct FunctionDirectory {
     functions: HashMap<String, FunctionInfo>,
+    // Memory address counters
+    int_counter: i32,
+    float_counter: i32,
+    bool_counter: i32,
 }
 
 impl FunctionDirectory {
@@ -41,6 +52,30 @@ impl FunctionDirectory {
     pub fn new() -> Self {
         FunctionDirectory {
             functions: HashMap::new(),
+            int_counter: 1000,    // Starting at base addresses defined in quadruples.rs
+            float_counter: 2000,
+            bool_counter: 1000,   // Using int addresses for booleans
+        }
+    }
+
+    /// Get a new memory address for a variable based on its type
+    fn get_next_address(&mut self, var_type: &Type) -> i32 {
+        match var_type {
+            Type::Int => {
+                let addr = self.int_counter;
+                self.int_counter += 1;
+                addr
+            },
+            Type::Float => {
+                let addr = self.float_counter;
+                self.float_counter += 1;
+                addr
+            },
+            Type::Bool => {
+                let addr = self.bool_counter;
+                self.bool_counter += 1;
+                addr
+            },
         }
     }
 
@@ -66,7 +101,14 @@ impl FunctionDirectory {
                     "global".to_string()
                 ));
             }
-            global_vars.insert(var.id.clone(), var.var_type.clone());
+            
+            // Assign a memory address based on the variable type
+            let address = directory.get_next_address(&var.var_type);
+            
+            global_vars.insert(var.id.clone(), VariableInfo {
+                var_type: var.var_type.clone(),
+                address,
+            });
         }
         
         directory.functions.insert("global".to_string(), FunctionInfo {
@@ -104,7 +146,7 @@ impl FunctionDirectory {
         let mut params = Vec::new();
         let mut param_names = HashMap::new();
         
-        // Check for duplicate parameters
+        // Check for duplicate parameters and assign addresses
         for param in &func.parameters {
             // Check if parameter name already exists
             if param_names.contains_key(&param.id) {
@@ -114,13 +156,16 @@ impl FunctionDirectory {
                 ));
             }
             
+            // Assign a memory address based on the parameter type
+            let address = self.get_next_address(&param.param_type);
+            
             param_names.insert(param.id.clone(), ());
-            params.push((param.id.clone(), param.param_type.clone()));
+            params.push((param.id.clone(), param.param_type.clone(), address));
         }
         
         let mut local_vars = HashMap::new();
         
-        // Check for duplicate local variables
+        // Check for duplicate local variables and assign addresses
         for var in &func.vars {
             // Check if variable name already exists as a local variable
             if local_vars.contains_key(&var.id) {
@@ -138,7 +183,13 @@ impl FunctionDirectory {
                 ));
             }
             
-            local_vars.insert(var.id.clone(), var.var_type.clone());
+            // Assign a memory address based on the variable type
+            let address = self.get_next_address(&var.var_type);
+            
+            local_vars.insert(var.id.clone(), VariableInfo {
+                var_type: var.var_type.clone(),
+                address,
+            });
         }
         
         self.functions.insert(func.id.clone(), FunctionInfo {
@@ -167,15 +218,52 @@ impl FunctionDirectory {
     pub fn get_variable_type(&self, function_name: &str, variable_name: &str) -> Option<&Type> {
         // Check if variable exists in the function's local scope
         if let Some(func_info) = self.functions.get(function_name) {
-            if let Some(var_type) = func_info.local_variables.get(variable_name) {
-                return Some(var_type);
+            if let Some(var_info) = func_info.local_variables.get(variable_name) {
+                return Some(&var_info.var_type);
+            }
+            
+            // Check if it's a parameter
+            for (param_name, param_type, _) in &func_info.parameters {
+                if param_name == variable_name {
+                    return Some(param_type);
+                }
             }
         }
         
         // If not found and not in global scope, check global scope
         if function_name != "global" {
             if let Some(global_info) = self.functions.get("global") {
-                return global_info.local_variables.get(variable_name);
+                if let Some(var_info) = global_info.local_variables.get(variable_name) {
+                    return Some(&var_info.var_type);
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Get a variable's address from a function (or from global if not found)
+    pub fn get_variable_address(&self, function_name: &str, variable_name: &str) -> Option<i32> {
+        // Check if variable exists in the function's local scope
+        if let Some(func_info) = self.functions.get(function_name) {
+            if let Some(var_info) = func_info.local_variables.get(variable_name) {
+                return Some(var_info.address);
+            }
+            
+            // Check if it's a parameter
+            for (param_name, _, param_addr) in &func_info.parameters {
+                if param_name == variable_name {
+                    return Some(*param_addr);
+                }
+            }
+        }
+        
+        // If not found and not in global scope, check global scope
+        if function_name != "global" {
+            if let Some(global_info) = self.functions.get("global") {
+                if let Some(var_info) = global_info.local_variables.get(variable_name) {
+                    return Some(var_info.address);
+                }
             }
         }
         
@@ -188,7 +276,7 @@ impl FunctionDirectory {
     }
     
     /// Get all global variables
-    pub fn get_global_variables(&self) -> Option<&HashMap<String, Type>> {
+    pub fn get_global_variables(&self) -> Option<&HashMap<String, VariableInfo>> {
         self.functions.get("global").map(|info| &info.local_variables)
     }
     
@@ -197,6 +285,25 @@ impl FunctionDirectory {
         match self.functions.get(name) {
             Some(info) => info.is_program,
             None => false,
+        }
+    }
+
+    /// Check if a type assignment is valid based on the semantic cube rules
+    pub fn is_valid_assignment(&self, target_type: &Type, value_type: &Type) -> bool {
+        match (target_type, value_type) {
+            // Same types are always valid
+            (Type::Int, Type::Int) => true,
+            (Type::Float, Type::Float) => true,
+            (Type::Bool, Type::Bool) => true,
+            
+            // Int can be assigned to float (but with possible precision loss)
+            (Type::Float, Type::Int) => true,
+            
+            // A boolean result can be assigned to a boolean variable
+            (Type::Bool, _) => true,  // Allowing any type to bool for comparison results
+            
+            // All other combinations are invalid
+            _ => false,
         }
     }
 }

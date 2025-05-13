@@ -219,79 +219,88 @@ During the implementation, several challenges were encountered:
 
 4. **Complex Expressions**: Supporting nested expressions with different operators required careful consideration of precedence and associativity.
 
-## Test Cases
+## Intermediate Code Generation
 
-The following test cases were developed to validate the compiler's functionality: They can be run with `cargo test`.
+The compiler generates intermediate code in the form of quadruples, which represent operations in a format that's closer to machine language while still being abstract enough to be machine-independent.
 
-### Basic Program Structure
+### Data Structures for Quadruple Generation
 
-```rust
-let program = r#"
-    program example;
-    var x: int;
-    var y: float;
-    main {
-        x = 10;
-        y = 20.5;
-    }
-    end
-"#;
-```
+The quadruple generator uses several important data structures to manage the compilation process:
 
-### Control Structures
+#### Stacks
 
-```rust
-let program = r#"
-    program example;
-    var x: int;
-    main {
-        if (x > 5) {
-            print("x is greater than 5");
-        } else {
-            print("x is not greater than 5");
-        }
-    }
-    end
-"#;
-```
+1. **p_oper (Operator Stack)**
+  - Stores operators during expression parsing
+  - Used to manage operator precedence
+  - Implemented as a Rust `Vec<i32>` with push/pop operations
+  - Operators are stored as integer codes for efficiency
+  - Each operator is pushed when encountered during expression parsing
+  - Operators are popped and processed when their precedence is lower than or equal to the operator at the top of the stack
 
-### Loops and Arithmetic
+2. **pila_o (Operand Stack)**
+  - Stores memory addresses of operands (variables, constants, temporaries)
+  - Implemented as a Rust `Vec<i32>`
+  - Addresses pointing to the memory location of each value
+  - Used to track operands during expression evaluation
+  - When an expression is processed, operands are pushed onto this stack
+  - When an operation is performed, operands are popped, and the result address is pushed back
 
-```rust
-let program = r#"
-    program example;
-    var x: int;
-    main {
-        x = 0;
-        while (x < 10) do {
-            x = x + 1;
-        };
-        print(x);
-    }
-    end
-"#;
-```
+3. **p_types (Type Stack)**
+  - Parallel to the operand stack, stores the type of each operand
+  - Implemented as a Rust `Vec<Type>`
+  - Used for type checking and semantic validation
+  - Each type is pushed when an operand is pushed onto pila_o
+  - Types are used for semantic checking to determine the result type of operations
 
-### Complex Program
+#### Queues
 
-```rust
-let program = r#"
-    program example;
-    var x: int;
-    var y: float;
-    main {
-        x = 10;
-        y = 20.5;
-        if (x > 5) {
-            print("x is greater than 5");
-        } else {
-            print("x is not greater than 5");
-        }
-        while (x < 100) do {
-            x = x + 1;
-        };
-        print(x);
-    }
-    end
-"#;
-```
+1. **quad_queue (Quadruple Queue)**
+  - Stores generated quadruples
+  - Implemented as a Rust `VecDeque<Quadruple>`
+  - Each quadruple represents a single operation in the intermediate code
+  - Contains operation code, operand addresses, and result address
+  - Quadruples are consumed by the virtual machine during execution
+
+### Key Semantic Actions in Quadruple Generation
+
+The compiler uses several neuralgic points in expression parsing to generate quadruples:
+
+1. **Action 1: Push Operand**
+  - **Location**: When encountering identifiers or constants in factors
+  - **Action**: Pushes the operand's memory address to pila_o and its type to p_types
+  - **Implementation**: `action_push_id()` for variables and `action_push_constant()` for literals
+  - **Purpose**: Prepares operands for future operations
+
+2. **Action 2: Push Multiplication/Division Operator**
+  - **Location**: When encountering * or / operators in term expressions
+  - **Action**: Pushes the operator code to p_oper stack
+  - **Implementation**: `action_push_mult_div_oper()`
+  - **Purpose**: Records high-precedence operations for processing
+
+3. **Action 3: Push Addition/Subtraction Operator**
+  - **Location**: When encountering + or - operators in expressions
+  - **Action**: Pushes the operator code to p_oper stack
+  - **Implementation**: `action_push_add_sub_oper()`
+  - **Purpose**: Records lower-precedence operations for processing
+
+4. **Action 4: Process Addition/Subtraction Operations**
+  - **Location**: After processing a term, checks if + or - operations should be resolved
+  - **Action**:
+    - Checks if top operator in p_oper is + or -
+    - If yes, pops operands and types from respective stacks
+    - Performs type checking via semantics function
+    - Generates quadruple for the operation
+    - Pushes result address and type back to stacks
+  - **Implementation**: `action_process_operation(false)`
+  - **Purpose**: Maintains operator precedence by processing + and - operations at appropriate times
+
+5. **Action 5: Process Multiplication/Division Operations**
+  - **Location**: After processing a factor, checks if * or / operations should be resolved
+  - **Action**:
+    - Similar to Action 4, but checks for * or / operators
+    - Pops operands and generates quadruples with higher precedence
+    - Uses temporary variables to store intermediate results
+  - **Implementation**: `action_process_operation(true)`
+  - **Purpose**: Ensures higher-precedence operations (* and /) are processed before lower-precedence ones (+ and -)
+
+Each of these actions is triggered at specific points in the parsing process, as indicated in the semantic action diagram. The coordination between these actions ensures that expressions are evaluated with the correct operator precedence and type checking.

@@ -18,6 +18,7 @@ pub struct VarDeclaration {
 pub enum Type {
     Int,
     Float,
+    Bool
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +46,7 @@ pub enum Expression {
     Identifier(String),
     IntegerLiteral(i32),
     FloatLiteral(f64),
+    BooleanLiteral(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +58,7 @@ pub enum Operator {
     GreaterThan,
     LessThan,
     Equal,
+    NotEqual,
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +83,6 @@ pub struct FunctionCall {
 #[derive(Debug, Clone)]
 pub enum PrintStatement {
     Expression(Expression),
-    StringLiteral(String),
 }
 
 #[derive(Debug, Clone)]
