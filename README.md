@@ -511,6 +511,8 @@ The quadruple generator uses several important data structures to manage the com
 
 The compiler uses several neuralgic points in expression parsing to generate quadruples:
 
+![Diagrama sin titulo](Diagrama%20sin%20título.drawio.png)
+
 1. **Action 1: Push Operand**
     - **Location**: When encountering identifiers or constants in factors
     - **Action**: Pushes the operand's memory address to pila_o and its type to p_types
