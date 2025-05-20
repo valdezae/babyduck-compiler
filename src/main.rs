@@ -336,6 +336,156 @@ fn test_quadruple_generation() {
     println!("\nQuadruple generation test passed");
 }
 
+#[test]
+fn test_control_flow_quadruple_generation() {
+    // Create a program with conditional statements and loops
+    let program = r#"
+    program control_flow_test;
+    var x, y, result, counter: int;
+    var flag: bool;
+    main {
+        // Simple if-else statement
+        if (x > y) {
+            result = x;
+        } else {
+            result = y;
+        }
+        
+        // Nested if-else
+        if (x == 5) {
+            if (y == 10) {
+                result = 15;
+            } else {
+                result = 5;
+            }
+        } else {
+            result = 0;
+        }
+        
+        // Simple while loop
+        counter = 0;
+        while (counter < 5) do {
+            counter = counter + 1;
+        };
+        
+        // While loop with conditional inside
+        counter = 0;
+        while (counter < 10) do {
+            counter = counter + 1;
+            if (counter == 5) {
+                result = 100;
+            }
+        };
+        
+        // Bool variable in condition
+        flag = x > y;
+        if (flag) {
+            result = 1;
+        } else {
+            result = 0;
+        }
+    }
+    end
+    "#;
+
+    let parse_result = babyduck::ProgramParser::new().parse(program);
+    assert!(parse_result.is_ok(), "Failed to parse program: {:?}", parse_result.err());
+    
+    let ast = parse_result.unwrap();
+    
+    // Create function directory for variable lookups
+    let function_directory_result = FunctionDirectory::from_program(&ast);
+    assert!(function_directory_result.is_ok(), "Failed to create function directory: {:?}", function_directory_result.err());
+    let function_directory = function_directory_result.unwrap();
+    println!("{:#?}", function_directory);
+    
+    // Create quadruple generator
+    let mut quad_gen = QuadrupleGenerator::new();
+    quad_gen.set_function_directory(function_directory);
+    quad_gen.set_current_scope("main");
+    
+    // Generate quadruples from the AST's main statements
+    quad_gen.generate_from_statements(&ast.main_body);
+    
+    println!("\n=== QUADRUPLES VECTOR FOR CONTROL FLOW TEST ===");
+
+    println!("\n=== QUADRUPLES GENERATED FOR CONTROL FLOW TEST ===");
+    // Get the generated quadruples and print them in tabular format
+    let quadruples = quad_gen.get_quadruples_as_strings();
+    
+    println!("Generated quadruples:");
+    println!("===================================");
+    println!("No. | Operation | Arg1 | Arg2 | Result");
+    println!("-----------------------------------");
+
+    for (i, quad) in quadruples.iter().enumerate() {
+        // Strip the outer parentheses if they exist
+        let quad_str = if quad.starts_with('(') && quad.ends_with(')') {
+            &quad[1..quad.len()-1]
+        } else {
+            quad
+        };
+
+        // Split by commas and print in a tabular format
+        let parts: Vec<&str> = quad_str.split(',').map(|s| s.trim()).collect();
+        if parts.len() >= 4 {
+            println!("{:3} | {:9} | {:4} | {:4} | {:6}", i, parts[0], parts[1], parts[2], parts[3]);
+        } else {
+            println!("{:3} | {}", i, quad);
+        }
+    }
+    println!("===================================");
+    
+    // Verify the quadruples
+    
+    // 1. Check for GOTO and GOTOF operations which are essential for control flow
+    let goto_count = quadruples.iter()
+                               .filter(|q| q.contains("GOTO"))
+                               .count();
+    let gotof_count = quadruples.iter()
+                                .filter(|q| q.contains("GOTOF"))
+                                .count();
+                                
+    println!("\nFound {} GOTO and {} GOTOF operations", goto_count, gotof_count);
+    assert!(goto_count >= 4, "Expected at least 4 GOTO operations for control structures");
+    assert!(gotof_count >= 5, "Expected at least 5 GOTOF operations for control structures");
+    
+    // 2. Check for comparison operations
+    let comparison_ops = quadruples.iter()
+                                   .filter(|q| q.contains(">") || 
+                                              q.contains("<") ||
+                                              q.contains("=="))
+                                   .count();
+    println!("Found {} comparison operations", comparison_ops);
+    assert!(comparison_ops >= 5, "Expected at least 5 comparison operations for control structures");
+    
+    // 3. Check for assignments in both if and else branches
+    let assign_ops = quadruples.iter()
+                               .filter(|q| q.contains("="))
+                               .count();
+    println!("Found {} assignment operations", assign_ops);
+    assert!(assign_ops >= 8, "Expected at least 8 assignment operations");
+    
+    // 4. Check for addition operations (counter increments)
+    let add_ops = quadruples.iter()
+                            .filter(|q| q.contains("+"))
+                            .count();
+    println!("Found {} addition operations", add_ops);
+    assert!(add_ops >= 2, "Expected at least 2 addition operations for counter increments");
+    
+    // Print variable addresses for reference
+    println!("\nVariable Addresses:");
+    println!("===================================");
+    println!("Variable | Address");
+    println!("-----------------------------------");
+    for (name, addr) in quad_gen.get_variables() {
+        println!("{:8} | {:6}", name, addr);
+    }
+    println!("===================================");
+    
+    println!("\nControl flow quadruple generation test passed successfully!");
+}
+
 fn main() {
     println!("BabyDuck Compiler");
     println!("Run the tests using 'cargo test' to verify the parser's functionality");

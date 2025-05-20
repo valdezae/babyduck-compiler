@@ -107,6 +107,7 @@ pub struct QuadrupleGenerator {
     p_oper: Vec<i32>,            // operator stack (POper in the image)
     pila_o: Vec<i32>,           // operand stack (PilaO in the image)
     p_types: Vec<Type>,          // type stack (PTypes in the image)
+    p_jumps: Vec<usize>,        // jumps stack (PSaltos in the image) - stores quadruple indices
 
     // Queue for generated quadruples
     quad_queue: VecDeque<Quadruple>,
@@ -136,6 +137,7 @@ impl QuadrupleGenerator {
             p_oper: Vec::new(),
             pila_o: Vec::new(),
             p_types: Vec::new(),
+            p_jumps: Vec::new(),    // Initialize jump stack
             quad_queue: VecDeque::new(),
             temp_int_counter: MemoryAddresses::TEMP_INT_START,
             temp_float_counter: MemoryAddresses::TEMP_FLOAT_START,
@@ -363,15 +365,124 @@ impl QuadrupleGenerator {
     }
 
     /// Process a conditional statement (if/else)
-    fn process_condition(&mut self, _cond: &crate::ast::Condition) {
-        // For the current implementation, we'll focus only on arithmetic expressions and assignments
-        // This would be implemented in a more complete compiler
+    fn process_condition(&mut self, cond: &crate::ast::Condition) {
+        // 1. Process the condition expression
+        self.process_expression(&cond.condition);
+        
+        // 2. Get the result from the expression evaluation
+        if let Some(result_addr) = self.pila_o.pop() {
+            let result_type = self.p_types.pop().unwrap_or(Type::Bool);
+            
+            // Check that the condition evaluates to a boolean result
+            if !matches!(result_type, Type::Bool) {
+                println!("Warning: Condition should evaluate to a boolean result");
+            }
+            
+            // 3. Generate GOTOF quadruple (goto false)
+            //    The target address is initially set to -1 and will be filled later
+            let gotof_quad_idx = self.quad_queue.len();
+            self.quad_queue.push_back(Quadruple::new(
+                OpCode::GOTOF,
+                result_addr,
+                -1,
+                -1 // Placeholder for jump destination
+            ));
+            
+            // 4. Push jump position to jumps stack
+            self.p_jumps.push(gotof_quad_idx);
+            
+            // 5. Process if-body statements
+            self.generate_from_statements(&cond.if_body);
+            
+            // Check if there's an else clause
+            if let Some(else_body) = &cond.else_body {
+                // 6. Generate GOTO to skip over else-body once if-body completes
+                let goto_quad_idx = self.quad_queue.len();
+                self.quad_queue.push_back(Quadruple::new(
+                    OpCode::GOTO,
+                    -1,
+                    -1,
+                    -1 // Placeholder for jump destination after else
+                ));
+                
+                // 7. Fill the pending GOTOF jump with the current quad position
+                let jump_target = self.quad_queue.len();
+                self.fill_jump(gotof_quad_idx, jump_target as i32);
+                
+                // 8. Push the GOTO position to jumps stack
+                self.p_jumps.push(goto_quad_idx);
+                
+                // 9. Process else-body statements
+                self.generate_from_statements(else_body);
+                
+                // 10. Fill the pending GOTO jump with the current quad position
+                let jump_target = self.quad_queue.len();
+                let jump_pos = self.p_jumps.pop().unwrap(); // GOTO jump
+                self.fill_jump(jump_pos, jump_target as i32);
+            } else {
+                // 6b. No else clause, fill the GOTOF with the current quad position
+                let jump_target = self.quad_queue.len();
+                let jump_pos = self.p_jumps.pop().unwrap(); // GOTOF jump
+                self.fill_jump(jump_pos, jump_target as i32);
+            }
+        }
     }
 
     /// Process a cycle statement (while)
-    fn process_cycle(&mut self, _cycle: &crate::ast::Cycle) {
-        // For the current implementation, we'll focus only on arithmetic expressions and assignments
-        // This would be implemented in a more complete compiler
+    fn process_cycle(&mut self, cycle: &crate::ast::Cycle) {
+        // 1. Save the position where we need to return for the next iteration
+        let return_pos = self.quad_queue.len();
+        
+        // 2. Process the condition expression
+        self.process_expression(&cycle.condition);
+        
+        // 3. Get the result from the expression evaluation
+        if let Some(result_addr) = self.pila_o.pop() {
+            let result_type = self.p_types.pop().unwrap_or(Type::Bool);
+            
+            // Check that the condition evaluates to a boolean result
+            if !matches!(result_type, Type::Bool) {
+                println!("Warning: Cycle condition should evaluate to a boolean result");
+            }
+            
+            // 4. Generate GOTOF quadruple (goto false)
+            //    The target address is initially set to -1 and will be filled later
+            let gotof_quad_idx = self.quad_queue.len();
+            self.quad_queue.push_back(Quadruple::new(
+                OpCode::GOTOF,
+                result_addr,
+                -1,
+                -1 // Placeholder for jump destination after the loop
+            ));
+            
+            // 5. Push jump position to jumps stack
+            self.p_jumps.push(gotof_quad_idx);
+            
+            // 6. Process loop body statements
+            self.generate_from_statements(&cycle.body);
+            
+            // 7. Generate GOTO to jump back to the condition evaluation
+            self.quad_queue.push_back(Quadruple::new(
+                OpCode::GOTO,
+                -1,
+                -1,
+                return_pos as i32 // Jump to condition evaluation
+            ));
+            
+            // 8. Fill the pending GOTOF jump with the current quad position
+            let jump_target = self.quad_queue.len();
+            let jump_pos = self.p_jumps.pop().unwrap(); // GOTOF jump
+            self.fill_jump(jump_pos, jump_target as i32);
+        }
+    }
+
+    /// Fill a jump quadruple's target address
+    fn fill_jump(&mut self, quad_idx: usize, target: i32) {
+        if let Some(quad) = self.quad_queue.get_mut(quad_idx) {
+            quad.result = target;
+        } else {
+            println!("Error: Could not fill jump at index {}", quad_idx);
+        }
     }
 
     /// Process a function call
@@ -758,6 +869,7 @@ impl QuadrupleGenerator {
         self.p_oper.clear();
         self.pila_o.clear();
         self.p_types.clear();
+        self.p_jumps.clear();  // Clear jumps stack
         self.quad_queue.clear();
         self.int_constants.clear();
         self.float_constants.clear();

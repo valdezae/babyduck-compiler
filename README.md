@@ -511,6 +511,8 @@ The quadruple generator uses several important data structures to manage the com
 
 The compiler uses several neuralgic points in expression parsing to generate quadruples:
 
+![Diagrama sin título.drawio (2).png](Diagrama%20sin%20t%C3%ADtulo.drawio%20%282%29.png)
+
 1. **Action 1: Push Operand**
     - **Location**: When encountering identifiers or constants in factors
     - **Action**: Pushes the operand's memory address to pila_o and its type to p_types
@@ -549,4 +551,147 @@ The compiler uses several neuralgic points in expression parsing to generate qua
     - **Implementation**: `action_process_operation(true)`
     - **Purpose**: Ensures higher-precedence operations (* and /) are processed before lower-precedence ones (+ and -)
 
-Each of these actions is triggered at specific points in the parsing process, as indicated in the semantic action diagram. The coordination between these actions ensures that expressions are evaluated with the correct operator precedence and type checking.
+6. **Action 6: Process Condition Expression**
+    - **Location**: In CONDITION block after the if token, at the expression evaluation point between the parentheses
+    - **Action**: Evaluates the boolean expression that determines flow control
+    - **Implementation**: `self.process_expression(&cond.condition)`
+    - **Purpose**: Determines whether to execute the if-block or loop body
+
+7. **Action 7: Generate GOTOF (GoTo False) Quadruple**
+    - **Location**: After the right parenthesis in CONDITION block, before the Body
+    - **Action**: Creates a conditional jump with a placeholder destination
+    - **Implementation**: `self.quad_queue.push_back(Quadruple::new(OpCode::GOTOF, result_addr, -1, -1))`
+    - **Purpose**: Bypasses the if-body when condition is false
+
+8. **Action 8: Save Jump Position**
+    - **Location**: Same point as Action 7, in the transition between the condition and Body
+    - **Action**: Pushes the quadruple index to the jumps stack for later backpatching
+    - **Implementation**: `self.p_jumps.push(gotof_quad_idx)`
+    - **Purpose**: Remembers the position to update with correct jump destination
+
+9. **Action 9: Process Body Statements**
+    - **Location**: Inside the Body box of the CONDITION or CYCLE diagram sections
+    - **Action**: Processes all statements in the if-body or loop body
+    - **Implementation**: `self.generate_from_statements(&cond.if_body)` or `self.generate_from_statements(&cycle.body)`
+    - **Purpose**: Generates quadruples for the statements to be executed when condition is true
+
+10. **Action 10: Generate Unconditional GOTO (For If-Else Only)**
+    - **Location**: At the arrow leading from Body to the else token in CONDITION block
+    - **Action**: Creates a GOTO to skip the else block after if-body completes
+    - **Implementation**: `self.quad_queue.push_back(Quadruple::new(OpCode::GOTO, -1, -1, -1))`
+    - **Purpose**: Ensures if-body and else-body are mutually exclusive
+
+11. **Action 11: Backpatch GOTOF with Current Position**
+    - **Location**: At the arrow entering the else token or at the final semicolon if no else
+    - **Action**: Updates the previously created GOTOF with the correct jump target
+    - **Implementation**: `self.fill_jump(gotof_quad_idx, jump_target as i32)`
+    - **Purpose**: Completes the conditional jump to properly bypass code blocks
+
+12. **Action 12: Generate Loop-Back GOTO (For Cycle Only)**
+    - **Location**: At the arrow returning from the Body to the while condition in CYCLE block
+    - **Action**: Creates an unconditional jump back to condition evaluation
+    - **Implementation**: `self.quad_queue.push_back(Quadruple::new(OpCode::GOTO, -1, -1, return_pos as i32))`
+    - **Purpose**: Implements the repetitive nature of loops by returning to condition check
+
+13. **Action 13: Fill Final Jump Destination
+    - **Location**: At the final semicolon in CONDITION or CYCLE blocks
+    - **Action**: Backpatches any remaining jumps with the current position
+    - **Implementation**: `self.fill_jump(jump_pos, jump_target as i32)`
+    - **Purpose**:  Ensures all control flow paths converge at the correct point after the structure
+
+### Example of Generated Quadruples
+
+Below is an example of quadruples generated for a complex expression:
+
+```
+R = ((A + B) * C + D * E * F + K / H * J) + G * L + H + J > (A - C * D) / F;
+print(R);
+```
+
+This expression is parsed and converted to the following intermediate code:
+
+```
+Generated quadruples:
+===================================
+No. | Operation | Arg1 | Arg2 | Result
+-----------------------------------
+  0 | +         | 1000 | 1001 | 4000  
+  1 | *         | 4000 | 1002 | 4001  
+  2 | *         | 1003 | 1004 | 4002  
+  3 | *         | 4002 | 1005 | 4003  
+  4 | +         | 4001 | 4003 | 4004  
+  5 | /         | 1010 | 1007 | 4005  
+  6 | *         | 4005 | 1009 | 4006  
+  7 | +         | 4004 | 4006 | 4007  
+  8 | *         | 1006 | 1011 | 4008  
+  9 | +         | 4007 | 4008 | 4009  
+ 10 | +         | 4009 | 1007 | 4010  
+ 11 | +         | 4010 | 1009 | 4011  
+ 12 | *         | 1002 | 1003 | 4012  
+ 13 | -         | 1000 | 4012 | 4013  
+ 14 | /         | 4013 | 1005 | 4014  
+ 15 | >         | 4011 | 4014 | 6000  
+ 16 | =         | 6000 | -1   | 1012  
+ 17 | PRINT     | 1012 | -1   | -1    
+===================================
+```
+
+#### Memory Addressing Scheme
+
+In the quadruple system, different memory address ranges are used for different types of data:
+
+- **1000-1999**: Global and local integer variables
+- **2000-2999**: Float variables (both global and local)
+- **3000-3499**: Integer constants (literals stored in the constant table)
+- **3500-3999**: Float constants (literals stored in the constant table)
+- **4000-4999**: Integer temporaries (intermediate results)
+- **5000-5999**: Float temporaries (intermediate results)
+- **6000-6999**: Boolean temporaries (results of comparison operations)
+
+The variable addresses for this example are:
+
+```
+Variable Addresses:
+===================================
+Variable | Address
+-----------------------------------
+L        |   1011
+H        |   1007
+R        |   1012
+K        |   1010
+B        |   1001
+J        |   1009
+A        |   1000
+E        |   1004
+C        |   1002
+F        |   1005
+D        |   1003
+G        |   1006
+I        |   1008
+===================================
+```
+
+#### Execution Flow Explanation
+
+The quadruples above show the step-by-step calculation of the expression:
+
+1. First, `A + B` is calculated and stored in temp `4000` (quad 0)
+2. The result is multiplied by `C` and stored in temp `4001` (quad 1)
+3. In parallel, `D * E` is calculated and stored in temp `4002` (quad 2)
+4. That result is multiplied by `F` and stored in temp `4003` (quad 3)
+5. The results from steps 2 and 4 are added and stored in temp `4004` (quad 4)
+6. The division `K / H` is calculated and stored in temp `4005` (quad 5)
+7. That result is multiplied by `J` and stored in temp `4006` (quad 6)
+8. The results from steps 5 and 7 are added and stored in temp `4007` (quad 7)
+9. In parallel, `G * L` is calculated and stored in temp `4008` (quad 8)
+10. The results from steps 8 and 9 are added and stored in temp `4009` (quad 9)
+11. Add `H` to obtain temp `4010` (quad 10)
+12. Add `J` to obtain temp `4011` (quad 11), which completes the left side of the `>` operation
+13. For the right side, first `C * D` is calculated and stored in temp `4012` (quad 12)
+14. Then `A - 4012` is calculated and stored in temp `4013` (quad 13)
+15. Finally, `4013 / F` is calculated and stored in temp `4014` (quad 14)
+16. The comparison `4011 > 4014` is performed and stored in the boolean temp `6000` (quad 15)
+17. The boolean result is assigned to variable `R` (quad 16)
+18. The value of `R` is printed (quad 17)
+
+This demonstrates how a complex expression is broken down into simple operations following operator precedence rules, and how intermediate values are stored and reused in temporary variables.
