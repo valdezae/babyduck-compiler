@@ -300,7 +300,7 @@ impl QuadrupleGenerator {
         }
     }
 
-    /// Get next available temporary - this implements the AVAIL functionality
+    /// Get next available temporary
     fn avail_next(&mut self, typ: Type) -> i32 {
         self.new_temp(typ)
     }
@@ -816,7 +816,6 @@ impl QuadrupleGenerator {
                 },
                 Err(msg) => {
                     eprintln!("Type error: {}", msg);
-                    // Error recovery: push a placeholder (e.g., int) or handle more gracefully
                     let result_addr = self.avail_next(Type::Int); // Default to Int on error
                     self.pila_o.push(result_addr);
                     self.p_types.push(Type::Int);
