@@ -26,7 +26,8 @@ impl OpCode {
     pub const PRINT: i32 = 20;
     pub const GOTO: i32 = 30;
     pub const GOTOF: i32 = 31;
-    pub const GOTOT: i32 = 32; // Not currently used but defined
+    pub const GOTOT: i32 = 32; 
+    
     // Function call opcodes
     pub const ERA: i32 = 40;    // Activate Record / Function Call Setup
     pub const PARAM: i32 = 41;  // Parameter passing
@@ -43,7 +44,6 @@ impl MemoryAddresses {
     pub const BOOL_START: i32 = 3000;  // Memory segment for boolean variables
     pub const CTE_INT_START: i32 = 4000;
     pub const CTE_FLOAT_START: i32 = 4500;
-    // Removed CTE_BOOL_START constant
     pub const TEMP_INT_START: i32 = 5000;
     pub const TEMP_FLOAT_START: i32 = 6000;
     pub const TEMP_BOOL_START: i32 = 7000; // Temporary boolean variables
@@ -132,10 +132,10 @@ impl Quadruple {
 /// Handles the generation of quadruples for intermediate code
 pub struct QuadrupleGenerator {
     // Stacks for compilation - renamed to match the image
-    p_oper: Vec<i32>,            // operator stack (POper in the image)
-    pila_o: Vec<i32>,           // operand stack (PilaO in the image)
-    p_types: Vec<Type>,          // type stack (PTypes in the image)
-    p_jumps: Vec<usize>,         // jumps stack (PSaltos in the image) - stores quadruple indices
+    p_oper: Vec<i32>,            // operator stack 
+    pila_o: Vec<i32>,           // operand stack 
+    p_types: Vec<Type>,          // type stack 
+    p_jumps: Vec<usize>,         // jumps stack - stores quadruple indices
 
     // Queue for generated quadruples
     quad_queue: VecDeque<Quadruple>,
@@ -506,7 +506,7 @@ impl QuadrupleGenerator {
                 let goto_jump_pos_to_fill = self.p_jumps.pop().unwrap(); // Pop GOTO jump
                 self.fill_jump(goto_jump_pos_to_fill, jump_target_for_goto as i32);
             } else {
-                // 6b. No else clause, fill the GOTOF (from step 4) with the current quad position
+                // No else clause, fill the GOTOF (from step 4) with the current quad position
                 let jump_target_for_gotof = self.quad_queue.len();
                 let gotof_jump_pos_to_fill = self.p_jumps.pop().unwrap(); // Pop GOTOF jump
                 self.fill_jump(gotof_jump_pos_to_fill, jump_target_for_gotof as i32);
@@ -606,7 +606,6 @@ impl QuadrupleGenerator {
         let func_id_for_era = func_info.start_quad_idx.unwrap_or(-1); // Should be set by now
         if func_id_for_era == -1 {
             eprintln!("Error: start_quad_idx not set for function '{}' before call.", func_call.id);
-            // Potentially fatal error or recovery
         }
         self.quad_queue.push_back(Quadruple::new(OpCode::ERA, func_id_for_era, -1, -1));
 
@@ -641,10 +640,6 @@ impl QuadrupleGenerator {
         // 4. Generate GOSUB quad
         let func_target_quad = func_info.start_quad_idx.unwrap_or(-1); // Should be set
         self.quad_queue.push_back(Quadruple::new(OpCode::GOSUB, func_target_quad, -1, -1));
-
-        // 5. Handle return value if function is not void (BabyDuck is void only for now)
-        // If it had a return type, the result would be stored in a global/temp by the function,
-        // and the caller would need to push this onto PilaO and PTypes.
     }
 
 
@@ -716,7 +711,7 @@ impl QuadrupleGenerator {
     }
 
 
-    /// Match the semantic actions in the image
+    
     /// Action 1: PilaO.Push(id.name) and PTypes.Push(id.type)
     fn action_push_id(&mut self, id: &str) -> Result<i32, String> {
         // Look up the variable address and type from function directory

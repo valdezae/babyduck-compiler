@@ -1,9 +1,11 @@
 program test2;
-var flag, other: bool;
-var counter: int;
+var x: int;
 
 main {
-    flag = false;
-    print(flag);
-}
+     x = 10;
+     while (x > 5) do {
+                print(x);
+                x = x - 1;
+            };
+    }
 end

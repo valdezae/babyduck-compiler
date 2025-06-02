@@ -24,7 +24,7 @@ impl OpCode {
     pub const HALT: i32 = 50;
 }
 
-// Define Memory Address Constants (consistent with quadruples.rs)
+// Define Memory Address Constants
 const INT_START: i32 = 1000;
 const FLOAT_START: i32 = 2000;
 const BOOL_START: i32 = 3000;

@@ -29,7 +29,7 @@ pub struct VariableInfo {
     pub address: i32,  // Memory address where the variable is stored
 }
 
-/// Represents a function's metadata in the directory
+/// Represents a function in the directory
 #[derive(Debug, Clone)]
 pub struct FunctionInfo {
     pub return_type: Option<Type>,

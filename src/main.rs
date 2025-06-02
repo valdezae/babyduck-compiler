@@ -107,7 +107,7 @@ fn main() {
             for (_, _, addr) in &info.parameters { // Iterate over (param_name, param_type, param_address)
                 param_addrs_str.push_str(&format!(",{}", addr));
             }
-            // New format: name,start_idx,param_count,local_var_count[,param1_addr][,param2_addr]...
+            
             obj_content.push_str(&format!("{},{},{},{}{}\n", name, start_idx, param_count, local_var_count, param_addrs_str));
         }
     }
@@ -145,9 +145,6 @@ fn main() {
             std::process::exit(1);
         }
     }
-
-    // // Optional: Run the VM if a specific condition is met (e.g., a command-line flag or specific input file)
-    // // This is a simple demonstration. A proper CLI would handle this better.
    
     println!("\n--- Attempting to run VM on {} ---", output_filename);
     let mut vm_instance = vm::VM::new();
@@ -167,7 +164,6 @@ fn main() {
 }
 
 
-// --- ALL YOUR EXISTING TESTS GO HERE ---
 #[test]
 fn babyduck_basic_structure() {
     let program = r#"
@@ -259,7 +255,6 @@ fn babyduck_complex_program() {
 
 #[test]
 fn create_function_directory() {
-    // Updated to match the grammar definition - removing var declarations inside main body
     let program = r#"
     program example;
     var global_x: int;
