@@ -1,0 +1,9 @@
+program test2;
+var flag, other: bool;
+var counter: int;
+
+main {
+    flag = false;
+    print(flag);
+}
+end

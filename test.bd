@@ -1,0 +1,182 @@
+program ComplexTestProgram;
+
+// Test multiple variable sections with different declaration styles
+var
+    x, y, z : int;
+    temperature, humidity : float;
+
+var
+    flag, isReady, done : bool;
+
+var
+    counter : int;
+    result : float;
+
+// Test functions with different parameter configurations
+void printTwo(first : int, second : int) [
+    var
+        sum : int;
+    {
+        sum = first + second;
+        print(first);
+        print(second);
+        print(sum);
+    }
+];
+
+void calculate(base : float, multiplier : int) [
+    var
+        temp1 : float;
+        temp2 : float;
+        check : bool;
+    {
+        temp1 = base * multiplier;
+        temp2 = temp1 + 10.5;
+        check = temp2 > 50.0;
+        print(temp1);
+        print(temp2);
+        print(check);
+    }
+];
+
+void noParams() [
+    {
+        print(100);
+        print(3.14);
+    }
+];
+
+main {
+    // Test basic assignments with all types
+    x = 15;
+    y = 25;
+    z = 35;
+    temperature = 22.5;
+    humidity = 65.8;
+    flag = true;
+    isReady = false;
+    done = true;
+
+    // Test arithmetic expressions with proper precedence
+    counter = x + y * 2;        // Should be 65 (25*2=50, 15+50=65)
+    result = temperature * 2.0 + 5.5;  // Should be 50.5
+
+    // Test parentheses for precedence override
+    z = (x + y) * 2;           // Should be 80 ((15+25)*2)
+    humidity = (temperature + 5.0) * 1.5; // Should be 41.25
+
+    // Test all comparison operators
+    flag = x > y;              // false (15 > 25)
+    isReady = y < 30;          // true (25 < 30)
+    done = z == 80;            // true
+    flag = counter != 65;      // false
+
+    // Test print with variables and literals
+    print(x);
+    print(temperature);
+    print(flag);
+    print(42);
+    print(3.14159);
+
+    // Test print with expressions
+    print(x + y);
+    print(temperature - 2.5);
+    print(x * y);
+    print(humidity / 2.0);
+    print(x > 10);
+    print(temperature == 22.5);
+
+    // Test nested if statements
+    if (x < y) {
+        print(1);
+        counter = counter + 10;
+        if (counter > 70) {
+            print(2);
+            flag = true;
+        } else {
+            print(3);
+            flag = false;
+        }
+    } else {
+        print(4);
+        counter = counter - 5;
+    }
+
+    // Test if without else
+    if (temperature > 20.0) {
+        humidity = humidity + 5.0;
+        print(humidity);
+    }
+
+    // Test while loops with different conditions
+    counter = 1;
+    while (counter < 5) do {
+        print(counter);
+        counter = counter + 1;
+    };
+
+    // Test while with float condition
+    result = 10.0;
+    while (result > 5.0) do {
+        print(result);
+        result = result - 1.5;
+    };
+
+    // Test nested while loops
+    x = 1;
+    while (x < 3) do {
+        y = 1;
+        while (y < 2) do {
+            z = x * y;
+            print(z);
+            y = y + 1;
+        };
+        x = x + 1;
+    };
+
+    // Test function calls with different argument patterns
+    printTwo(10, 20);
+    printTwo(x, y);
+    printTwo(x + 5, y - 3);
+
+    calculate(25.5, 2);
+    calculate(temperature, 3);
+    calculate(humidity / 2.0, counter);
+
+    noParams();
+
+    // Test more complex expressions
+    x = y + z - counter;
+    temperature = humidity * 0.5 + 15.0;
+    flag = x > y + 10;
+    isReady = temperature < humidity - 5.0;
+
+    // Test complex function call arguments
+    printTwo(x * 2, y + z);
+    calculate(temperature + 5.0, x - y);
+
+    // Final complex conditional
+    if (flag == true) {
+        while (x > 0) do {
+            print(x);
+            x = x - 10;
+            if (x < 5) {
+                done = true;
+                print(done);
+            }
+        };
+    } else {
+        counter = 0;
+        while (counter < 3) do {
+            print(counter * 2);
+            counter = counter + 1;
+        };
+    }
+
+    // Final outputs
+    print(x);
+    print(temperature);
+    print(flag);
+    print(done);
+}
+end
